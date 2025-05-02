@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Random Cleaning Task</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        #task {
+            font-size: 24px;
+            margin: 20px 0;
+            color: #333;
+        }
+        #qrcode {
+            margin: 20px auto;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #resetButton {
+            display: none; /* Hidden by default */
+        }
+    </style>
+</head>
+<body>
+    <h1>Daily Cleaning Task</h1>
+    <div id="task">Scan the QR code to get a task!</div>
+    <div id="qrcode"></div>
+    <button id="resetButton" onclick="resetTasks()">Reset Tasks Now</button>
+
+    <script>
+        const tasks = [
+            "Vacuum living room & rug",
+            "Vac your room & hallway",
+            "Sweep mudroom & vacuum (doesn’t need to perfect)",
+            "Scrub toilets",
+            "Wipe bathroom counter",
+            "Wipe coffee tables, desk, piano in living room",
+            "Wipe bathroom sinks & your room window seal",
+            "Wipe down showers",
+            "Sweep bathroom",
+            "Empty all room trash cans (keep liners) into bathroom trash can if 3/4th full take outside",
+            "Dust picture frames in living room/dining room",
+            "Put linens in laundry basket in white bag",
+            "Organize books"
+        ];
+
+        const STORAGE_KEY = 'cleaningTasks';
+        const TIMESTAMP_KEY = 'lastReset';
+
+        function getStoredData() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            const lastReset = localStorage.getItem(TIMESTAMP_KEY);
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 16, 0, 0); // Today at 4 PM
+            const lastResetDate = lastReset ? new Date(parseInt(lastReset)) : null;
+
+            // Reset if past 4 PM today and last reset was before today's 4 PM
+            if (lastReset && (now >= today && (!lastResetDate || lastResetDate < today))) {
+                localStorage.removeItem(STORAGE_KEY);
+                localStorage.setItem(TIMESTAMP_KEY, now.getTime().toString());
+                return { remainingTasks: [...tasks], lastReset: now.getTime() };
+            }
+
+            return {
+                remainingTasks: stored ? JSON.parse(stored) : [...tasks],
+                lastReset: lastReset ? parseInt(lastReset) : now.getTime()
+            };
+        }
+
+        function saveStoredData(remainingTasks, lastReset) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(remainingTasks));
+            localStorage.setItem(TIMESTAMP_KEY, lastReset.toString());
+        }
+
+        function getRandomTask() {
+            let { remainingTasks, lastReset } = getStoredData();
+
+            if (remainingTasks.length === 0) {
+                return "No tasks left for today!";
+            }
+
+            // Calculate weights: task at index 0 gets weight 13, index 1 gets 12, ..., index 12 gets 1
+            const weights = remainingTasks.map((_, index) => tasks.length - tasks.indexOf(remainingTasks[index]));
+            const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+            let random = Math.random() * totalWeight;
+
+            let selectedIndex = 0;
+            for (let i = 0; i < weights.length; i++) {
+                random -= weights[i];
+                if (random <= 0) {
+                    selectedIndex = i;
+                    break;
+                }
+            }
+
+            const selectedTask = remainingTasks[selectedIndex];
+            remainingTasks.splice(selectedIndex, 1);
+
+            saveStoredData(remainingTasks, lastReset);
+            return selectedTask;
+        }
+
+        function resetTasks() {
+            const now = new Date().getTime();
+            saveStoredData([...tasks], now);
+            document.getElementById('task').innerText = "Tasks reset! Scan to get a new task.";
+        }
+
+        function displayTask() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('getTask')) {
+                const task = getRandomTask();
+                document.getElementById('task').innerText = task;
+            }
+        }
+
+        function checkAdminAccess() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('admin') && urlParams.get('admin') === 'true') {
+                document.getElementById('resetButton').style.display = 'block';
+            }
+        }
+
+        function generateQRCode() {
+            const currentUrl = window.location.href.split('?')[0];
+            const taskUrl = `${currentUrl}?getTask=true`;
+            new QRCode(document.getElementById("qrcode"), {
+                text: taskUrl,
+                width: 200,
+                height: 200
+            });
+        }
+
+        window.onload = () => {
+            generateQRCode();
+            displayTask();
+            checkAdminAccess();
+        };
+    </script>
+</body>
+</html>
